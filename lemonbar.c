@@ -10,12 +10,22 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <errno.h>
+
+#include <X11/Xlib.h>
+#include <X11/Xlib-xcb.h>
+
 #include <xcb/xcb.h>
 #include <xcb/xcbext.h>
 #if WITH_XINERAMA
 #include <xcb/xinerama.h>
 #endif
 #include <xcb/randr.h>
+
+//#include <GL/glew.h>
+//#include <GL/glut.h>
+
+#include <GL/glx.h>
+#include <GL/gl.h>
 
 // Here be dragons
 
@@ -82,6 +92,49 @@ enum {
 };
 
 #define MAX_FONT_COUNT 5
+
+Display *display;
+int default_screen;
+GLXContext context;
+GLXFBConfig fb_config;
+GLXDrawable drawable = 0;
+/*
+    Attribs filter the list of FBConfigs returned by glXChooseFBConfig().
+    Visual attribs further described in glXGetFBConfigAttrib(3)
+*/
+static int visual_attribs[] =
+{
+    GLX_X_RENDERABLE, True,
+    GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+    GLX_RENDER_TYPE, GLX_RGBA_BIT,
+    GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
+    GLX_RED_SIZE, 8,
+    GLX_GREEN_SIZE, 8,
+    GLX_BLUE_SIZE, 8,
+    GLX_ALPHA_SIZE, 8,
+    GLX_DEPTH_SIZE, 24,
+    GLX_STENCIL_SIZE, 8,
+    GLX_DOUBLEBUFFER, True,
+    //GLX_SAMPLE_BUFFERS  , 1,
+    //GLX_SAMPLES         , 4,
+    None
+};
+
+// Getting glsl stuff in place
+const char *vertexShaderSource = "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "}\0";
+const char *fragmentShaderSource = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "void main()\n"
+    "{\n"
+    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "}\n\0";
+//
+
 
 static xcb_connection_t *c;
 static xcb_screen_t *scr;
@@ -1100,6 +1153,45 @@ parse_geometry_string (char *str, int *tmp)
 void
 xconn (void)
 {
+    /* Open Xlib Display */ 
+    display = XOpenDisplay(0);
+    if(!display)
+    {
+        fprintf(stderr, "Can't open display\n");
+        return -1;
+    }
+    default_screen = DefaultScreen(display);
+
+
+    int visualID = 0;
+
+    /* Query framebuffer configurations that match visual_attribs */
+    GLXFBConfig *fb_configs = 0;
+    int num_fb_configs = 0;
+    fb_configs = glXChooseFBConfig(display, default_screen, visual_attribs, &num_fb_configs);
+    if(!fb_configs || num_fb_configs == 0)
+    {
+        fprintf(stderr, "glXGetFBConfigs failed\n");
+        return -1;
+    }
+
+    printf("\nFound %d matching FB configs\n", num_fb_configs);
+
+    /* Select first framebuffer config and query visualID */
+    fb_config = fb_configs[0];
+    glXGetFBConfigAttrib(display, fb_config, GLX_VISUAL_ID , &visualID);
+
+    /* Create OpenGL context */
+    context = glXCreateNewContext(display, fb_config, GLX_RGBA_TYPE, 0, True);
+    if(!context)
+    {
+        fprintf(stderr, "glXCreateNewContext failed\n");
+        return -1;
+    }
+
+
+
+
     // Connect to X
     c = xcb_connect (NULL, NULL);
     if (xcb_connection_has_error(c)) {
@@ -1162,7 +1254,7 @@ init (char *wm_name)
                 get_xinerama_monitors();
 
             free(xia_reply);
-        }
+        
     }
 #endif
 
@@ -1205,6 +1297,34 @@ init (char *wm_name)
     for (monitor_t *mon = monhead; mon; mon = mon->next) {
         fill_rect(mon->pixmap, gc[GC_CLEAR], 0, 0, mon->width, bh);
         xcb_map_window(c, mon->window);
+
+
+        //
+        // Create the GLX window!
+        //
+        GLXWindow glxwindow = glXCreateWindow(display, fb_config, mon->window, 0);
+        drawable = glxwindow;
+
+        /* make OpenGL context current */
+        if(!glXMakeContextCurrent(display, drawable, drawable, context))
+        {
+            //xcb_destroy_window(connection, window);
+            glXDestroyContext(display, context);
+
+            fprintf(stderr, "glXMakeContextCurrent failed\n");
+            return -1;
+        }
+
+        const unsigned char* version = glGetString(GL_VERSION);
+        printf("\nGL_VERSION is: %s\n", version);
+
+        // Get a shader created:
+        
+        // Create two separable program objects from a 
+        // single source string respectively (vertSrc and fragSrc)
+        GLuint vertProg = glCreateShaderProgramv(GL_VERTEX_SHADER  , 1, &vertexShaderSource);
+        GLuint fragProg = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &fragmentShaderSource);
+
 
         // Make sure that the window really gets in the place it's supposed to be
         // Some WM such as Openbox need this
@@ -1395,6 +1515,13 @@ main (int argc, char **argv)
         }
 
         if (redraw) { // Copy our temporary pixmap onto the window
+
+            // move this to a draw() method:
+            glClearColor(0.2, 0.4, 0.9, 1.0); 
+            glClear(GL_COLOR_BUFFER_BIT);
+            glXSwapBuffers(display, drawable);
+            // end draw() method
+
             for (monitor_t *mon = monhead; mon; mon = mon->next) {
                 xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
             }

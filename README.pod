@@ -12,6 +12,19 @@ I<lemonbar> [-h | -g I<width>B<x>I<height>B<+>I<x>B<+>I<y> | -b | -d | -f I<font
 
 B<lemonbar> (formerly known as B<bar>) is a lightweight bar entirely based on XCB. Provides full UTF-8 support, basic formatting, RandR and Xinerama support and EWMH compliance without wasting your precious memory.
 
+=head2 DEPS
+
+```
+sudo apt-get install xorg-dev libglu1-mesa-dev libxcb-xinerama0-dev
+```
+
+=head2 BUILD
+
+```
+make
+./example.sh | ./lemonbar -p
+```
+
 =head1 OPTIONS
 
 =over

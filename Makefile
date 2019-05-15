@@ -8,7 +8,8 @@ endif
 
 CC	?= gcc
 CFLAGS += -Wall -std=c99 -Os -DVERSION="\"$(VERSION)\""
-LDFLAGS += -lxcb -lxcb-xinerama -lxcb-randr
+LDFLAGS += -lxcb -lxcb-xinerama -lxcb-randr -lGL -lGLU -lglut -lX11 
+#-llibX11-xcb
 CFDEBUG = -g3 -pedantic -Wall -Wunused-parameter -Wlong-long \
           -Wsign-conversion -Wconversion -Wimplicit-function-declaration
 
