@@ -121,6 +121,11 @@ static int visual_attribs[] =
 };
 
 // Getting glsl stuff in place
+GLuint vao;
+GLuint vbo;
+GLuint idx;
+GLuint tex;
+GLuint program;
 const char *vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "void main()\n"
@@ -133,6 +138,19 @@ const char *fragmentShaderSource = "#version 330 core\n"
     "{\n"
     "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
     "}\n\0";
+
+GLfloat vertices[] = {
+   1.0f,  1.0f,  0.0f, 1.0f, 1.0f,
+  -1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
+  -1.0f, -1.0f,  0.0f, 0.0f, 0.0f
+};
+
+unsigned int indices[] = { 0, 1, 2 };
+
+float pixels[] = {
+  0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+  1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f
+};
 //
 
 
@@ -153,6 +171,33 @@ static int bu = 1; // Underline height
 static rgba_t fgc, bgc, ugc;
 static rgba_t dfgc, dbgc, dugc;
 static area_stack_t area_stack;
+
+
+void printStatus(const char *step, GLuint context, GLuint status)
+{
+  GLint result = GL_FALSE;
+  glGetShaderiv(context, status, &result);
+  if (result == GL_FALSE) {
+    char buffer[1024];
+    if (status == GL_COMPILE_STATUS)
+      glGetShaderInfoLog(context, 1024, NULL, buffer);
+    else
+      glGetProgramInfoLog(context, 1024, NULL, buffer);
+    if (buffer[0])
+      fprintf(stderr, "%s: %s\n", step, buffer);
+  };
+}
+
+void printCompileStatus(const char *step, GLuint context)
+{
+  printStatus(step, context, GL_COMPILE_STATUS);
+}
+
+void printLinkStatus(const char *step, GLuint context)
+{
+  printStatus(step, context, GL_LINK_STATUS);
+}
+
 
 void
 update_gc (void)
@@ -1325,7 +1370,50 @@ init (char *wm_name)
         GLuint vertProg = glCreateShaderProgramv(GL_VERTEX_SHADER  , 1, &vertexShaderSource);
         GLuint fragProg = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &fragmentShaderSource);
 
+        GLuint v = glCreateShader(GL_VERTEX_SHADER);
+        GLuint f = glCreateShader(GL_FRAGMENT_SHADER);
 
+        glShaderSource(v, 1, &vertexShaderSource, NULL);
+        glShaderSource(f, 1, &fragmentShaderSource, NULL);
+
+        glCompileShader(v);
+        printCompileStatus("Vertex shader", v);
+        glCompileShader(f);
+        printCompileStatus("Fragment shader", f);
+
+        program = glCreateProgram();
+        glAttachShader(program, vertProg);
+        glAttachShader(program, fragProg);
+        glLinkProgram(program);
+        printLinkStatus("Shader program", program);
+
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glGenBuffers(1, &idx);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, idx);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(glGetAttribLocation(program, "point"), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+        glVertexAttribPointer(glGetAttribLocation(program, "texcoord"), 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
+
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+
+        glGenTextures(1, &tex);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glUniform1i(glGetUniformLocation(program, "tex"), 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_BGR, GL_FLOAT, pixels);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glGenerateMipmap(GL_TEXTURE_2D);
+  
         // Make sure that the window really gets in the place it's supposed to be
         // Some WM such as Openbox need this
         xcb_configure_window(c, mon->window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, (const uint32_t []){ mon->x, mon->y });
@@ -1519,6 +1607,8 @@ main (int argc, char **argv)
             // move this to a draw() method:
             glClearColor(0.2, 0.4, 0.9, 1.0); 
             glClear(GL_COLOR_BUFFER_BIT);
+            glUseProgram(program);
+            glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void *)0);
             glXSwapBuffers(display, drawable);
             // end draw() method
 
