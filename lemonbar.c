@@ -126,17 +126,19 @@ GLuint vbo;
 GLuint idx;
 GLuint tex;
 GLuint program;
-const char *vertexShaderSource = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
+
+    //"layout (location = 0) in vec3 aPos;\n"
+const char *vertexShaderSource = "#version 130\n"
+    "in vec3 aPos;\n"
     "void main()\n"
     "{\n"
     "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
     "}\0";
-const char *fragmentShaderSource = "#version 330 core\n"
+const char *fragmentShaderSource = "#version 130\n"
     "out vec4 FragColor;\n"
     "void main()\n"
     "{\n"
-    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     "}\n\0";
 
 GLfloat vertices[] = {
@@ -1602,20 +1604,20 @@ main (int argc, char **argv)
             }
         }
 
-        if (redraw) { // Copy our temporary pixmap onto the window
+        //if (redraw) { // Copy our temporary pixmap onto the window
 
             // move this to a draw() method:
-            glClearColor(0.2, 0.4, 0.9, 1.0); 
+            glClearColor(1.0, 0.0, 0.0, 1.0); 
             glClear(GL_COLOR_BUFFER_BIT);
             glUseProgram(program);
             glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void *)0);
             glXSwapBuffers(display, drawable);
             // end draw() method
 
-            for (monitor_t *mon = monhead; mon; mon = mon->next) {
-                xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
-            }
-        }
+            //for (monitor_t *mon = monhead; mon; mon = mon->next) {
+            //    xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
+            //}
+        //}
 
         xcb_flush(c);
     }
