@@ -121,33 +121,51 @@ static int visual_attribs[] =
 };
 
 // Getting glsl stuff in place
+GLint positionAttrib;
+GLint colorAttrib;
 GLuint vao;
 GLuint vbo;
-GLuint idx;
+GLuint ebo;
 GLuint tex;
 GLuint program;
 
     //"layout (location = 0) in vec3 aPos;\n"
 const char *vertexShaderSource = "#version 130\n"
-    "in vec3 aPos;\n"
+    "in vec2 position;\n"
+    //"in vec3 color;\n"
+    //"out vec3 Color;\n"
     "void main()\n"
     "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    //"   Color = color;\n"
+    "   gl_Position = vec4(position.x, position.y, 0.0f, 1.0f);\n"
     "}\0";
 const char *fragmentShaderSource = "#version 130\n"
+    //"in vec3 Color;\n"
     "out vec4 FragColor;\n"
     "void main()\n"
     "{\n"
     "   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(Color, 1.0f);\n"
     "}\n\0";
 
 GLfloat vertices[] = {
-   1.0f,  1.0f,  0.0f, 1.0f, 1.0f,
-  -1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-  -1.0f, -1.0f,  0.0f, 0.0f, 0.0f
+     0.0f,  1.0f, 1.0f, 0.0f, 0.0f, // Vertex 1: Red
+     0.5f, -0.5f, 0.0f, 1.0f, 0.0f, // Vertex 2: Green
+    -0.5f, -0.5f, 0.0f, 0.0f, 1.0f  // Vertex 3: Blue
 };
 
-unsigned int indices[] = { 0, 1, 2 };
+// Quad for shader work:
+//GLfloat vertices[] = {
+//   -1.0f, 1.0f, // top left
+//   1.0f, 1.0f,  // top right
+//   1.0f, -1.0f,  // bottom right
+//   -1.0f, -1.0f, // bottom left
+//};
+
+GLuint elements[] = {
+    0, 1, 2,
+    2, 3, 0
+};
 
 float pixels[] = {
   0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
@@ -181,13 +199,24 @@ void printStatus(const char *step, GLuint context, GLuint status)
   glGetShaderiv(context, status, &result);
   if (result == GL_FALSE) {
     char buffer[1024];
-    if (status == GL_COMPILE_STATUS)
+    if (status == GL_COMPILE_STATUS) {
+      printf("GL_COMPILE_STATUS: Compile failed!\n");
       glGetShaderInfoLog(context, 1024, NULL, buffer);
-    else
+    } else if (status == GL_LINK_STATUS) {
+      printf("GL_LINK_STATUS: Link program failed!\n");
       glGetProgramInfoLog(context, 1024, NULL, buffer);
-    if (buffer[0])
+    } else {
+      printf("GL Status GL_FALSE! status GLuint requested was: %i\n", status);
+      glGetProgramInfoLog(context, 1024, NULL, buffer);
+    }
+    if (buffer[0]) {
       fprintf(stderr, "%s: %s\n", step, buffer);
-  };
+    } else {
+      printf("no buffer?? %s\n", buffer);
+    }
+  } else {
+    printf("GL Status should be good!\n");
+  }
 }
 
 void printCompileStatus(const char *step, GLuint context)
@@ -1366,55 +1395,96 @@ init (char *wm_name)
         printf("\nGL_VERSION is: %s\n", version);
 
         // Get a shader created:
+        // 
+        // Start with some buffer array objects:
+        glGenVertexArrays(1, &vao); // vertexes array
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo); // vertex buffer will actually have data copied into it
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); // load data into buffer
+
+        glGenBuffers(1, &ebo); // for the elements (vertex offset into vertices[], defined by elements[])
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
+
         
         // Create two separable program objects from a 
         // single source string respectively (vertSrc and fragSrc)
-        GLuint vertProg = glCreateShaderProgramv(GL_VERTEX_SHADER  , 1, &vertexShaderSource);
-        GLuint fragProg = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &fragmentShaderSource);
+        //GLuint vertProg = glCreateShaderProgramv(GL_VERTEX_SHADER  , 1, &vertexShaderSource);
+        //GLuint fragProg = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &fragmentShaderSource);
 
         GLuint v = glCreateShader(GL_VERTEX_SHADER);
-        GLuint f = glCreateShader(GL_FRAGMENT_SHADER);
-
         glShaderSource(v, 1, &vertexShaderSource, NULL);
-        glShaderSource(f, 1, &fragmentShaderSource, NULL);
-
         glCompileShader(v);
         printCompileStatus("Vertex shader", v);
+
+        GLuint f = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(f, 1, &fragmentShaderSource, NULL);
         glCompileShader(f);
         printCompileStatus("Fragment shader", f);
 
+        printf("okay, shader compile attempted...\n");
+
         program = glCreateProgram();
-        glAttachShader(program, vertProg);
-        glAttachShader(program, fragProg);
+        glAttachShader(program, v);
+        glAttachShader(program, f);
+
+        // Pick which output buffer (0 is default) to send the output to:
+        glBindFragDataLocation(program, 0, "FragColor");
         glLinkProgram(program);
-        printLinkStatus("Shader program", program);
+        
+        // Get errors from linking the program
+        GLint success;
+        GLchar infoLog[512];
+        glGetProgramiv(program, GL_LINK_STATUS, &success);
+        if (!success) {
+          printf("Program failed to link!\n");
+          glGetProgramInfoLog(program, 512, NULL, infoLog);
+          fprintf(stderr, "%s\n", infoLog);
+          printf("derp %s\n", infoLog);
+        } else {
+          printf("Program seems to have compiled okay!\n");
+        }
+        //printLinkStatus("Shader program", program); // This is broken...
 
-        glGenVertexArrays(1, &vao);
-        glBindVertexArray(vao);
+        // Start using the program!!!!
+        glUseProgram(program);
 
-        glGenBuffers(1, &vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        // Specify the data layout in the buffer. This is the tricky bit. 
+        // 0: Which attribute input (use glGetAttribLocation() to find this)
+        // 1: number of values for that input (3 for vec3, 2 for vec2, whatever)
+        // 2: gl type
+        // 3: Range of values: -1.0 -> 1.0 (GL_FALSE), or normalized 0.0 -> 1.0 (GL_TRUE)
+        // 4: stride (how many bytes between each ELEMENT in the array (i.e. each vertex in a vertex array)
+        // 5: offset (how many bytes offset from the start of the array the attribute occurs)
+        // 
+        // This was stupid because values like these were in the example I was using (FOR A TRIANGLE):
+        // GLfloat vertices[] = {
+        //    1.0f,  1.0f,  0.0f, 1.0f, 1.0f, // vertex 1, xy rgb
+        //   -1.0f,  1.0f,  0.0f, 0.0f, 1.0f, // vertex 2, xy rgb
+        //   -1.0f, -1.0f,  0.0f, 0.0f, 0.0f  // vertex 3, xy rgb
+        // };
+        // 
+        // Which needed crazy strides and offsets:
+        positionAttrib = glGetAttribLocation(program, "position");
+        glEnableVertexAttribArray(positionAttrib);
+        glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void *)0);
+        
+        colorAttrib = glGetAttribLocation(program, "color");
+        glEnableVertexAttribArray(colorAttrib);
+        glVertexAttribPointer(colorAttrib, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void *)(2 * sizeof(GLfloat)));
 
-        glGenBuffers(1, &idx);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, idx);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        //glGenTextures(1, &tex);
+        //glActiveTexture(GL_TEXTURE0);
+        //glBindTexture(GL_TEXTURE_2D, tex);
+        //glUniform1i(glGetUniformLocation(program, "tex"), 0);
 
-        glVertexAttribPointer(glGetAttribLocation(program, "point"), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
-        glVertexAttribPointer(glGetAttribLocation(program, "texcoord"), 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
-
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-
-        glGenTextures(1, &tex);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex);
-        glUniform1i(glGetUniformLocation(program, "tex"), 0);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_BGR, GL_FLOAT, pixels);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glGenerateMipmap(GL_TEXTURE_2D);
+        //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_BGR, GL_FLOAT, pixels);
+        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        //glGenerateMipmap(GL_TEXTURE_2D);
   
         // Make sure that the window really gets in the place it's supposed to be
         // Some WM such as Openbox need this
@@ -1558,6 +1628,7 @@ main (int argc, char **argv)
     // Get the fd to Xserver
     pollin[1].fd = xcb_get_file_descriptor(c);
 
+    uint8_t countUp = 0;
     for (;;) {
         bool redraw = false;
 
@@ -1565,52 +1636,55 @@ main (int argc, char **argv)
         if (xcb_connection_has_error(c))
             break;
 
-        if (poll(pollin, 2, -1) > 0) {
-            if (pollin[0].revents & POLLHUP) {      // No more data...
-                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
-                else break;                         // ...bail out
-            }
-            if (pollin[0].revents & POLLIN) { // New input, process it
-                if (fgets(input, sizeof(input), stdin) == NULL)
-                    break; // EOF received
-
-                parse(input);
-                redraw = true;
-            }
-            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
-                while ((ev = xcb_poll_for_event(c))) {
-                    expose_ev = (xcb_expose_event_t *)ev;
-
-                    switch (ev->response_type & 0x7F) {
-                        case XCB_EXPOSE:
-                            if (expose_ev->count == 0)
-                                redraw = true;
-                            break;
-                        case XCB_BUTTON_PRESS:
-                            press_ev = (xcb_button_press_event_t *)ev;
-                            {
-                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
-                                // Respond to the click
-                                if (area) {
-                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
-                                    (void)write(STDOUT_FILENO, "\n", 1);
-                                }
-                            }
-                            break;
-                    }
-
-                    free(ev);
-                }
-            }
-        }
+//        if (poll(pollin, 2, -1) > 0) {
+//            if (pollin[0].revents & POLLHUP) {      // No more data...
+//                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
+//                else break;                         // ...bail out
+//            }
+//            if (pollin[0].revents & POLLIN) { // New input, process it
+//                if (fgets(input, sizeof(input), stdin) == NULL)
+//                    break; // EOF received
+//
+//                parse(input);
+//                redraw = true;
+//            }
+//            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
+//                while ((ev = xcb_poll_for_event(c))) {
+//                    expose_ev = (xcb_expose_event_t *)ev;
+//
+//                    switch (ev->response_type & 0x7F) {
+//                        case XCB_EXPOSE:
+//                            if (expose_ev->count == 0)
+//                                redraw = true;
+//                            break;
+//                        case XCB_BUTTON_PRESS:
+//                            press_ev = (xcb_button_press_event_t *)ev;
+//                            {
+//                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
+//                                // Respond to the click
+//                                if (area) {
+//                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
+//                                    (void)write(STDOUT_FILENO, "\n", 1);
+//                                }
+//                            }
+//                            break;
+//                    }
+//
+//                    free(ev);
+//                }
+//            }
+//        }
 
         //if (redraw) { // Copy our temporary pixmap onto the window
-
             // move this to a draw() method:
-            glClearColor(1.0, 0.0, 0.0, 1.0); 
+            countUp = countUp -1;
+            printf(". %f", countUp/255.0);
+
+            glClearColor(countUp/255.0, 0.0, 0.0, 1.0); 
+
             glClear(GL_COLOR_BUFFER_BIT);
             glUseProgram(program);
-            glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void *)0);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);
             glXSwapBuffers(display, drawable);
             // end draw() method
 
@@ -1619,7 +1693,7 @@ main (int argc, char **argv)
             //}
         //}
 
-        xcb_flush(c);
+        //xcb_flush(c);
     }
 
     return EXIT_SUCCESS;
