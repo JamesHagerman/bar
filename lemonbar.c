@@ -1672,7 +1672,6 @@ main (int argc, char **argv)
                 if (fgets(input, sizeof(input), stdin) == NULL)
                     break; // EOF received
 
-                printf("OK %s\n", input);
                 parse(input);
                 redraw = true;
             }
