@@ -1347,7 +1347,7 @@ init (char *wm_name)
                 get_xinerama_monitors();
 
             free(xia_reply);
-        
+        } 
     }
 #endif
 
