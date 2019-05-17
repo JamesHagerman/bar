@@ -1378,8 +1378,8 @@ init (char *wm_name)
 
     // Create the gc for drawing
     gc[GC_DRAW] = xcb_generate_id(c);
-    /* xcb_create_gc(c, gc[GC_DRAW], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ fgc.v }); */
-    /*  */
+    xcb_create_gc(c, gc[GC_DRAW], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ fgc.v });
+
     gc[GC_CLEAR] = xcb_generate_id(c);
     xcb_create_gc(c, gc[GC_CLEAR], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ bgc.v });
 
