@@ -21,9 +21,6 @@
 #endif
 #include <xcb/randr.h>
 
-//#include <GL/glew.h>
-//#include <GL/glut.h>
-
 #include <GL/glx.h>
 #include <GL/gl.h>
 
@@ -95,6 +92,8 @@ enum {
 
 Display *display;
 int default_screen;
+
+// GLX config stuff
 GLXContext context;
 GLXFBConfig fb_config;
 GLXDrawable drawable = 0;
@@ -120,47 +119,67 @@ static int visual_attribs[] =
     None
 };
 
-// Getting glsl stuff in place
-GLint positionAttrib;
-GLint colorAttrib;
+// The shader program itself:
+GLuint program;
+
+// Buffer objects:
 GLuint vao;
 GLuint vbo;
 GLuint ebo;
 GLuint tex;
-GLuint program;
 
-    //"layout (location = 0) in vec3 aPos;\n"
+// Getting glsl stuff in place
+GLint positionAttrib;
+GLint colorAttrib;
+GLint texcoordAttrib;
+
+// uniforms:
+GLint iGlobalTime;
+GLint iResolution;
+GLint barTex;
+
+// Scene counters:
+double currentFrame; // This increments 1 every draw loop
+uint8_t byteLoop8; // This also incrememnts 1 every draw loop, but wraps around
+uint16_t byteLoop16; // This also incrememnts 1 every draw loop, but wraps around
+
+// Attempting to get bar texture from pixmap:
+XImage *xim;
+int pixmap_height;
+int pixmap_width;
+
 const char *vertexShaderSource = "#version 130\n"
     "in vec2 position;\n"
-    //"in vec3 color;\n"
-    //"out vec3 Color;\n"
+    "in vec3 color;\n"
+    "in vec2 texcoord;\n"
+    "out vec3 Color;\n"
+    "out vec2 Texcoord;\n"
     "void main()\n"
     "{\n"
-    //"   Color = color;\n"
-    "   gl_Position = vec4(position.x, position.y, 0.0f, 1.0f);\n"
+    "   Color = color;\n"
+    "   Texcoord = texcoord;\n"
+    "   gl_Position = vec4(position, 0.0f, 1.0f);\n"
     "}\0";
 const char *fragmentShaderSource = "#version 130\n"
-    //"in vec3 Color;\n"
+    "in vec3 Color;\n"
+    "in vec2 Texcoord;\n"
     "out vec4 FragColor;\n"
+    "uniform float iGlobalTime;\n"
+    "uniform vec2 iResolution;\n"
+    "uniform sampler2D barTex;\n"
     "void main()\n"
     "{\n"
-    "   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     //"   FragColor = vec4(Color, 1.0f);\n"
+    "   FragColor = texture(barTex, Texcoord);\n"
     "}\n\0";
 
 GLfloat vertices[] = {
-     0.0f,  1.0f, 1.0f, 0.0f, 0.0f, // Vertex 1: Red
-     0.5f, -0.5f, 0.0f, 1.0f, 0.0f, // Vertex 2: Green
-    -0.5f, -0.5f, 0.0f, 0.0f, 1.0f  // Vertex 3: Blue
+    -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,// Top-left
+     1.0f,  1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,// Top-right
+     1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,// Bottom-right
+    -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f// Bottom-left
 };
-
-// Quad for shader work:
-//GLfloat vertices[] = {
-//   -1.0f, 1.0f, // top left
-//   1.0f, 1.0f,  // top right
-//   1.0f, -1.0f,  // bottom right
-//   -1.0f, -1.0f, // bottom left
-//};
 
 GLuint elements[] = {
     0, 1, 2,
@@ -168,11 +187,9 @@ GLuint elements[] = {
 };
 
 float pixels[] = {
-  0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
-  1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f
+  0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
+  1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f
 };
-//
-
 
 static xcb_connection_t *c;
 static xcb_screen_t *scr;
@@ -1226,7 +1243,7 @@ parse_geometry_string (char *str, int *tmp)
     return true;
 }
 
-void
+int
 xconn (void)
 {
     /* Open Xlib Display */ 
@@ -1361,8 +1378,8 @@ init (char *wm_name)
 
     // Create the gc for drawing
     gc[GC_DRAW] = xcb_generate_id(c);
-    xcb_create_gc(c, gc[GC_DRAW], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ fgc.v });
-
+    /* xcb_create_gc(c, gc[GC_DRAW], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ fgc.v }); */
+    /*  */
     gc[GC_CLEAR] = xcb_generate_id(c);
     xcb_create_gc(c, gc[GC_CLEAR], monhead->pixmap, XCB_GC_FOREGROUND, (const uint32_t []){ bgc.v });
 
@@ -1469,23 +1486,34 @@ init (char *wm_name)
         // Which needed crazy strides and offsets:
         positionAttrib = glGetAttribLocation(program, "position");
         glEnableVertexAttribArray(positionAttrib);
-        glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void *)0);
+        glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void *)0);
         
         colorAttrib = glGetAttribLocation(program, "color");
         glEnableVertexAttribArray(colorAttrib);
-        glVertexAttribPointer(colorAttrib, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void *)(2 * sizeof(GLfloat)));
+        glVertexAttribPointer(colorAttrib, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void *)(2 * sizeof(GLfloat)));
 
-        //glGenTextures(1, &tex);
-        //glActiveTexture(GL_TEXTURE0);
-        //glBindTexture(GL_TEXTURE_2D, tex);
-        //glUniform1i(glGetUniformLocation(program, "tex"), 0);
+        texcoordAttrib = glGetAttribLocation(program, "texcoord");
+        glEnableVertexAttribArray(texcoordAttrib);
+        glVertexAttribPointer(texcoordAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void *)(5*sizeof(GLfloat)));
 
-        //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_BGR, GL_FLOAT, pixels);
-        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        //glGenerateMipmap(GL_TEXTURE_2D);
-  
+        // Map the standard bar pixmap to a texture in glsl:
+        glGenTextures(1, &barTex);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, barTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0, GL_RGB, GL_FLOAT, pixels);
+        glUniform1i(glGetUniformLocation(program, "barTex"), 0);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        // Set up the iGlobalTime and iResolution uniforms:
+        GLint iGlobalTime = glGetUniformLocation(program, "iGlobalTime");
+        glUniform1f(iGlobalTime, 0.0f);
+        GLint iResolution = glGetUniformLocation(program, "iResolution");
+        glUniform2f(iResolution, 1.0f, 1.0f);
+        
         // Make sure that the window really gets in the place it's supposed to be
         // Some WM such as Openbox need this
         xcb_configure_window(c, mon->window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, (const uint32_t []){ mon->x, mon->y });
@@ -1628,7 +1656,6 @@ main (int argc, char **argv)
     // Get the fd to Xserver
     pollin[1].fd = xcb_get_file_descriptor(c);
 
-    uint8_t countUp = 0;
     for (;;) {
         bool redraw = false;
 
@@ -1636,64 +1663,80 @@ main (int argc, char **argv)
         if (xcb_connection_has_error(c))
             break;
 
-//        if (poll(pollin, 2, -1) > 0) {
-//            if (pollin[0].revents & POLLHUP) {      // No more data...
-//                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
-//                else break;                         // ...bail out
-//            }
-//            if (pollin[0].revents & POLLIN) { // New input, process it
-//                if (fgets(input, sizeof(input), stdin) == NULL)
-//                    break; // EOF received
-//
-//                parse(input);
-//                redraw = true;
-//            }
-//            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
-//                while ((ev = xcb_poll_for_event(c))) {
-//                    expose_ev = (xcb_expose_event_t *)ev;
-//
-//                    switch (ev->response_type & 0x7F) {
-//                        case XCB_EXPOSE:
-//                            if (expose_ev->count == 0)
-//                                redraw = true;
-//                            break;
-//                        case XCB_BUTTON_PRESS:
-//                            press_ev = (xcb_button_press_event_t *)ev;
-//                            {
-//                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
-//                                // Respond to the click
-//                                if (area) {
-//                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
-//                                    (void)write(STDOUT_FILENO, "\n", 1);
-//                                }
-//                            }
-//                            break;
-//                    }
-//
-//                    free(ev);
-//                }
-//            }
-//        }
+        if (poll(pollin, 2, -1) > 0) {
+            if (pollin[0].revents & POLLHUP) {      // No more data...
+                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
+                else break;                         // ...bail out
+            }
+            if (pollin[0].revents & POLLIN) { // New input, process it
+                if (fgets(input, sizeof(input), stdin) == NULL)
+                    break; // EOF received
 
-        //if (redraw) { // Copy our temporary pixmap onto the window
+                printf("OK %s\n", input);
+                parse(input);
+                redraw = true;
+            }
+            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
+                while ((ev = xcb_poll_for_event(c))) {
+                    expose_ev = (xcb_expose_event_t *)ev;
+
+                    switch (ev->response_type & 0x7F) {
+                        case XCB_EXPOSE:
+                            if (expose_ev->count == 0)
+                                redraw = true;
+                            break;
+                        case XCB_BUTTON_PRESS:
+                            press_ev = (xcb_button_press_event_t *)ev;
+                            {
+                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
+                                // Respond to the click
+                                if (area) {
+                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
+                                    (void)write(STDOUT_FILENO, "\n", 1);
+                                }
+                            }
+                            break;
+                    }
+
+                    free(ev);
+                }
+            }
+        }
+
+//          for (monitor_t *mon = monhead; mon; mon = mon->next) {
+//              xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
+//              //xim = XGetImage(display, mon->pixmap, 0, 0, mon->width, bh, AllPlanes, XYPixmap);
+//              //printf("xim: %s", xim);
+//              pixmap_width = mon->width;
+//              pixmap_height = bh;
+//          }
+
+        if (redraw) { // Copy our temporary pixmap onto the window
             // move this to a draw() method:
-            countUp = countUp -1;
-            printf(". %f", countUp/255.0);
+            currentFrame += 1;
+            byteLoop8 += 1;
+            byteLoop16 += 1;
+            //printf(". %f", byteLoop8/255.0);
 
-            glClearColor(countUp/255.0, 0.0, 0.0, 1.0); 
+            glUniform1f(iGlobalTime, currentFrame);
+            glUniform2f(iResolution, 100, 100);
+            //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pixmap_width, pixmap_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)(&(xim->data[0])));
 
+            glClearColor(byteLoop8/255.0, 0.0, 0.0, 1.0); 
             glClear(GL_COLOR_BUFFER_BIT);
-            glUseProgram(program);
+
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);
             glXSwapBuffers(display, drawable);
             // end draw() method
+          
+            for (monitor_t *mon = monhead; mon; mon = mon->next) {
+              xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
+            }
 
-            //for (monitor_t *mon = monhead; mon; mon = mon->next) {
-            //    xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
-            //}
-        //}
 
-        //xcb_flush(c);
+        }
+
+        xcb_flush(c);
     }
 
     return EXIT_SUCCESS;
