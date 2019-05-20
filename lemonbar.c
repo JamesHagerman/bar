@@ -171,11 +171,11 @@ const char *fragmentShaderSource = "#version 130\n"
     "{\n"
     //"   FragColor = vec4(0.0f, iGlobalTime, 0.0f, 1.0f);\n"
     "   float circle = sin(iGlobalTime*10.0f);\n"
-    "   FragColor = vec4(0.0f, circle, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(0.0f, circle, 0.0f, 1.0f);\n"
     //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     //"   FragColor = vec4(Color, 1.0f);\n"
-    //"   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), circle);\n"
+    "   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), circle);\n"
     //"   FragColor = texture(barTex, Texcoord);\n"
     "}\n\0";
 
@@ -1666,44 +1666,44 @@ main (int argc, char **argv)
         if (xcb_connection_has_error(c))
             break;
 
-//        if (poll(pollin, 2, -1) > 0) {
-//            if (pollin[0].revents & POLLHUP) {      // No more data...
-//                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
-//                else break;                         // ...bail out
-//            }
-//            if (pollin[0].revents & POLLIN) { // New input, process it
-//                if (fgets(input, sizeof(input), stdin) == NULL)
-//                    break; // EOF received
-//
-//                parse(input);
-//                redraw = true;
-//            }
-//            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
-//                while ((ev = xcb_poll_for_event(c))) {
-//                    expose_ev = (xcb_expose_event_t *)ev;
-//
-//                    switch (ev->response_type & 0x7F) {
-//                        case XCB_EXPOSE:
-//                            if (expose_ev->count == 0)
-//                                redraw = true;
-//                            break;
-//                        case XCB_BUTTON_PRESS:
-//                            press_ev = (xcb_button_press_event_t *)ev;
-//                            {
-//                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
-//                                // Respond to the click
-//                                if (area) {
-//                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
-//                                    (void)write(STDOUT_FILENO, "\n", 1);
-//                                }
-//                            }
-//                            break;
-//                    }
-//
-//                    free(ev);
-//                }
-//            }
-//        }
+        if (poll(pollin, 2, -1) > 0) {
+            if (pollin[0].revents & POLLHUP) {      // No more data...
+                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
+                else break;                         // ...bail out
+            }
+            if (pollin[0].revents & POLLIN) { // New input, process it
+                if (fgets(input, sizeof(input), stdin) == NULL)
+                    break; // EOF received
+
+                parse(input);
+                redraw = true;
+            }
+            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
+                while ((ev = xcb_poll_for_event(c))) {
+                    expose_ev = (xcb_expose_event_t *)ev;
+
+                    switch (ev->response_type & 0x7F) {
+                        case XCB_EXPOSE:
+                            if (expose_ev->count == 0)
+                                redraw = true;
+                            break;
+                        case XCB_BUTTON_PRESS:
+                            press_ev = (xcb_button_press_event_t *)ev;
+                            {
+                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
+                                // Respond to the click
+                                if (area) {
+                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
+                                    (void)write(STDOUT_FILENO, "\n", 1);
+                                }
+                            }
+                            break;
+                    }
+
+                    free(ev);
+                }
+            }
+        }
 
 
         //if (redraw) { // Copy our temporary pixmap onto the window
