@@ -7,7 +7,7 @@ ifneq "$(GIT_DESC)" ""
 endif
 
 CC	?= gcc
-CFLAGS += -Wall -std=c99 -Os -DVERSION="\"$(VERSION)\"" -g
+CFLAGS += -Wall -std=c99 -Os -DVERSION="\"$(VERSION)\"" -DGL_GLEXT_PROTOTYPES
 LDFLAGS += -lxcb -lxcb-xinerama -lxcb-randr -lGL -lGLU -lglut -lX11 
 #-llibX11-xcb
 CFDEBUG = -g3 -pedantic -Wall -Wunused-parameter -Wlong-long \

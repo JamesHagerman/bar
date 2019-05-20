@@ -129,17 +129,17 @@ GLuint ebo;
 GLuint tex;
 
 // Getting glsl stuff in place
-GLint positionAttrib;
-GLint colorAttrib;
-GLint texcoordAttrib;
+GLuint positionAttrib;
+GLuint colorAttrib;
+GLuint texcoordAttrib;
 
 // uniforms:
-GLint iGlobalTime;
-GLint iResolution;
-GLint barTex;
+GLuint iGlobalTime;
+GLuint iResolution;
+GLuint barTex;
 
 // Scene counters:
-double currentFrame; // This increments 1 every draw loop
+GLfloat currentFrame; // This increments 1 every draw loop
 uint8_t byteLoop8; // This also incrememnts 1 every draw loop, but wraps around
 uint16_t byteLoop16; // This also incrememnts 1 every draw loop, but wraps around
 
@@ -169,9 +169,14 @@ const char *fragmentShaderSource = "#version 130\n"
     "uniform sampler2D barTex;\n"
     "void main()\n"
     "{\n"
+    //"   FragColor = vec4(0.0f, iGlobalTime, 0.0f, 1.0f);\n"
+    "   float circle = sin(iGlobalTime*10.0f);\n"
+    "   FragColor = vec4(0.0f, circle, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     //"   FragColor = vec4(Color, 1.0f);\n"
-    "   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), 0.5);\n"
+    //"   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), circle);\n"
+    //"   FragColor = texture(barTex, Texcoord);\n"
     "}\n\0";
 
 GLfloat vertices[] = {
@@ -1510,9 +1515,7 @@ init (char *wm_name)
 
         // Set up the iGlobalTime and iResolution uniforms:
         GLint iGlobalTime = glGetUniformLocation(program, "iGlobalTime");
-        glUniform1f(iGlobalTime, 0.0f);
         GLint iResolution = glGetUniformLocation(program, "iResolution");
-        glUniform2f(iResolution, 1.0f, 1.0f);
         
         // Make sure that the window really gets in the place it's supposed to be
         // Some WM such as Openbox need this
@@ -1663,44 +1666,44 @@ main (int argc, char **argv)
         if (xcb_connection_has_error(c))
             break;
 
-        if (poll(pollin, 2, -1) > 0) {
-            if (pollin[0].revents & POLLHUP) {      // No more data...
-                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
-                else break;                         // ...bail out
-            }
-            if (pollin[0].revents & POLLIN) { // New input, process it
-                if (fgets(input, sizeof(input), stdin) == NULL)
-                    break; // EOF received
-
-                parse(input);
-                redraw = true;
-            }
-            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
-                while ((ev = xcb_poll_for_event(c))) {
-                    expose_ev = (xcb_expose_event_t *)ev;
-
-                    switch (ev->response_type & 0x7F) {
-                        case XCB_EXPOSE:
-                            if (expose_ev->count == 0)
-                                redraw = true;
-                            break;
-                        case XCB_BUTTON_PRESS:
-                            press_ev = (xcb_button_press_event_t *)ev;
-                            {
-                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
-                                // Respond to the click
-                                if (area) {
-                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
-                                    (void)write(STDOUT_FILENO, "\n", 1);
-                                }
-                            }
-                            break;
-                    }
-
-                    free(ev);
-                }
-            }
-        }
+//        if (poll(pollin, 2, -1) > 0) {
+//            if (pollin[0].revents & POLLHUP) {      // No more data...
+//                if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
+//                else break;                         // ...bail out
+//            }
+//            if (pollin[0].revents & POLLIN) { // New input, process it
+//                if (fgets(input, sizeof(input), stdin) == NULL)
+//                    break; // EOF received
+//
+//                parse(input);
+//                redraw = true;
+//            }
+//            if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
+//                while ((ev = xcb_poll_for_event(c))) {
+//                    expose_ev = (xcb_expose_event_t *)ev;
+//
+//                    switch (ev->response_type & 0x7F) {
+//                        case XCB_EXPOSE:
+//                            if (expose_ev->count == 0)
+//                                redraw = true;
+//                            break;
+//                        case XCB_BUTTON_PRESS:
+//                            press_ev = (xcb_button_press_event_t *)ev;
+//                            {
+//                                area_t *area = area_get(press_ev->event, press_ev->detail, press_ev->event_x);
+//                                // Respond to the click
+//                                if (area) {
+//                                    (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
+//                                    (void)write(STDOUT_FILENO, "\n", 1);
+//                                }
+//                            }
+//                            break;
+//                    }
+//
+//                    free(ev);
+//                }
+//            }
+//        }
 
 
         //if (redraw) { // Copy our temporary pixmap onto the window
@@ -1712,9 +1715,10 @@ main (int argc, char **argv)
               pixmap_height = bh;
           }
             // move this to a draw() method:
-            currentFrame += 1;
+            currentFrame += 0.01f;
             byteLoop8 += 1;
             byteLoop16 += 1;
+            printf(". %f, %f\n", currentFrame, currentFrame);
             //printf(". %f", byteLoop8/255.0);
 
             glUniform1f(iGlobalTime, currentFrame);
