@@ -1666,7 +1666,9 @@ main (int argc, char **argv)
         if (xcb_connection_has_error(c))
             break;
 
-        if (poll(pollin, 2, -1) > 0) {
+        // Check all open file descriptors for any new events:
+        if (poll(pollin, 2, 30) > 0) { // Only poll for 30ms before redrawing screen
+            // Check events from standard in: pollin[0]
             if (pollin[0].revents & POLLHUP) {      // No more data...
                 if (permanent) pollin[0].fd = -1;   // ...null the fd and continue polling :D
                 else break;                         // ...bail out
@@ -1678,6 +1680,8 @@ main (int argc, char **argv)
                 parse(input);
                 redraw = true;
             }
+
+            // Check events from the xorg server: pollin[1]
             if (pollin[1].revents & POLLIN) { // The event comes from the Xorg server
                 while ((ev = xcb_poll_for_event(c))) {
                     expose_ev = (xcb_expose_event_t *)ev;

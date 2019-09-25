@@ -12,7 +12,7 @@ battery() {
 # List of all the monitors/screens you have in your setup
 MONITORS=$(xrandr | grep -o "^.* connected" | sed "s/ connected//")
 
-while true; do  
+#while true; do  
   BAR_INPUT="%{c}LIFE : $(battery)%% TIME : $(clock)"
   
   # Put the same thing on all monitors:
@@ -25,6 +25,6 @@ while true; do
   
   # Spit out the combined command
   echo $BAR_OUT
-  sleep 1
-done
+#  sleep 1
+#done
 
