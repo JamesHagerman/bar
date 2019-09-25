@@ -1708,34 +1708,35 @@ main (int argc, char **argv)
                 }
             }
         }
+  
+        // move this to a draw() method:
+        currentFrame += 0.01f;
+        byteLoop8 += 1;
+        byteLoop16 += 1;
+        //printf(". %f", byteLoop8/255.0);
 
-
-        //if (redraw) { // Copy our temporary pixmap onto the window
-          
+        glUniform1f(iGlobalTime, currentFrame);
+        
+        // Copy the original lemonbar pixel map output into a GL texture if it's been updated:
+        if (redraw) {
           for (monitor_t *mon = monhead; mon; mon = mon->next) {
               //xcb_copy_area(c, mon->pixmap, mon->window, gc[GC_DRAW], 0, 0, 0, 0, mon->width, bh);
               xim = XGetImage(display, mon->pixmap, 0, 0, mon->width, bh, AllPlanes, ZPixmap);
               pixmap_width = mon->width;
               pixmap_height = bh;
+              printf("monitor:%i, w:%i, h:%i\n", mon->window, pixmap_width, pixmap_height);
           }
-            // move this to a draw() method:
-            currentFrame += 0.01f;
-            byteLoop8 += 1;
-            byteLoop16 += 1;
-            printf(". %f, %f\n", currentFrame, currentFrame);
-            //printf(". %f", byteLoop8/255.0);
+          glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pixmap_width, pixmap_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)(&(xim->data[0])));
+        }
+        printf("f:%f, w:%i, h:%i\n", currentFrame, pixmap_width, pixmap_height);
+        glUniform2f(iResolution, pixmap_width, pixmap_height);
+        
+        glClearColor(byteLoop8/255.0, 0.0, 0.0, 1.0); 
+        glClear(GL_COLOR_BUFFER_BIT);
 
-            glUniform1f(iGlobalTime, currentFrame);
-            glUniform2f(iResolution, 100, 100);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pixmap_width, pixmap_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)(&(xim->data[0])));
-
-            glClearColor(byteLoop8/255.0, 0.0, 0.0, 1.0); 
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);
-            glXSwapBuffers(display, drawable);
-            // end draw() method
-        //}
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void *)0);
+        glXSwapBuffers(display, drawable);
+        // end draw() method
 
         xcb_flush(c);
     }
