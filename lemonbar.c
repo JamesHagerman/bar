@@ -148,6 +148,51 @@ XImage *xim;
 int pixmap_height;
 int pixmap_width;
 
+// Working test shader:
+// Until I get file loading working, DO NOT MODIFY THIS ONE... Just clone it...
+//const char *fragmentShaderSource = "#version 130\n"
+//    "in vec3 Color;\n"
+//    "in vec2 Texcoord;\n"
+//    "out vec4 FragColor;\n"
+//    "uniform float iGlobalTime;\n"
+//    "uniform vec2 iResolution;\n"
+//    "uniform sampler2D barTex;\n"
+//    "void main()\n"
+//    "{\n"
+//    //"   FragColor = vec4(0.0f, iGlobalTime, 0.0f, 1.0f);\n"
+//    "   float circle = sin(iGlobalTime*10.0f);\n"
+//    //"   FragColor = vec4(0.0f, circle, 0.0f, 1.0f);\n"
+//    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
+//    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
+//    //"   FragColor = vec4(Color, 1.0f);\n"
+//    "   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), circle);\n"
+//    //"   FragColor = texture(barTex, Texcoord);\n"
+//    "}\n\0";
+
+
+const char *fragmentShaderSource = "#version 130\n"
+    "in vec3 Color;\n"
+    "in vec2 Texcoord;\n"
+    "out vec4 FragColor;\n"
+    "uniform float iGlobalTime;\n"
+    "uniform vec2 iResolution;\n"
+    "uniform sampler2D barTex;\n"
+    "void main()\n"
+    "{\n"
+    "   vec2 uv = Texcoord;\n"
+    //"   FragColor = vec4(0.0f, iGlobalTime, 0.0f, 1.0f);\n"
+    "   float circle = sin(iGlobalTime*10.0f);\n"
+    "   FragColor = vec4(0.0f, circle, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
+    //"   FragColor = vec4(Color, 1.0f);\n"
+    //"   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), circle);\n"
+    //"   FragColor = texture(barTex, Texcoord);\n"
+    "}\n\0";
+
+
+// Nothing below here should need changes!
+// This vertex shader just throws up the quad that presents the shader!
 const char *vertexShaderSource = "#version 130\n"
     "in vec2 position;\n"
     "in vec3 color;\n"
@@ -160,24 +205,6 @@ const char *vertexShaderSource = "#version 130\n"
     "   Texcoord = texcoord;\n"
     "   gl_Position = vec4(position, 0.0f, 1.0f);\n"
     "}\0";
-const char *fragmentShaderSource = "#version 130\n"
-    "in vec3 Color;\n"
-    "in vec2 Texcoord;\n"
-    "out vec4 FragColor;\n"
-    "uniform float iGlobalTime;\n"
-    "uniform vec2 iResolution;\n"
-    "uniform sampler2D barTex;\n"
-    "void main()\n"
-    "{\n"
-    //"   FragColor = vec4(0.0f, iGlobalTime, 0.0f, 1.0f);\n"
-    "   float circle = sin(iGlobalTime*10.0f);\n"
-    //"   FragColor = vec4(0.0f, circle, 0.0f, 1.0f);\n"
-    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
-    //"   FragColor = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
-    //"   FragColor = vec4(Color, 1.0f);\n"
-    "   FragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), circle);\n"
-    //"   FragColor = texture(barTex, Texcoord);\n"
-    "}\n\0";
 
 GLfloat vertices[] = {
     -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,// Top-left
