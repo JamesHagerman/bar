@@ -148,6 +148,45 @@ XImage *xim;
 int pixmap_height;
 int pixmap_width;
 
+char *buffer;
+
+
+//char *loadShader(const char *fragment_path) {
+void loadShader(const char *fragment_path) {
+  FILE *fp;
+  long lSize;
+
+  fp = fopen("shader.frag", "rb");
+  if (!fp) {
+    printf("error reading shader file\n");
+    exit(1);
+  }
+  
+  fseek(fp, 0L, SEEK_END);
+  lSize = ftell(fp);
+  rewind(fp);
+
+  printf("Shader is %li bytes long\n", lSize);
+
+  buffer = calloc(1, lSize + 1);
+  if (!buffer) {
+    fclose(fp);
+    printf("allocation failed for shader buffer\n");
+    exit(1);
+  }
+
+  if ( 1 != fread(buffer, lSize, 1, fp) ) {
+    fclose(fp);
+    free(buffer);
+    printf("Entire read fails\n");
+  }
+
+  fclose(fp);
+  //free(buffer);
+
+  //return buffer;
+}
+
 // Working test shader:
 // Until I get file loading working, DO NOT MODIFY THIS ONE... Just clone it...
 //const char *fragmentShaderSource = "#version 130\n"
@@ -1340,9 +1379,6 @@ xconn (void)
         return -1;
     }
 
-
-
-
     // Connect to X
     c = xcb_connect (NULL, NULL);
     if (xcb_connection_has_error(c)) {
@@ -1358,6 +1394,8 @@ xconn (void)
 
     colormap = xcb_generate_id(c);
     xcb_create_colormap(c, XCB_COLORMAP_ALLOC_NONE, colormap, scr->root, visual);
+
+    return 0;
 }
 
 void
@@ -1463,7 +1501,6 @@ init (char *wm_name)
             glXDestroyContext(display, context);
 
             fprintf(stderr, "glXMakeContextCurrent failed\n");
-            return -1;
         }
 
         const unsigned char* version = glGetString(GL_VERSION);
@@ -1650,6 +1687,10 @@ main (int argc, char **argv)
     areas = 10;
     wm_name = NULL;
 
+    // Load the shader:
+    loadShader("shader.txt");
+    printf("shader: \n%s", buffer);
+    
     // Connect to the Xserver and initialize scr
     xconn();
 
