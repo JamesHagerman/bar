@@ -149,43 +149,7 @@ int pixmap_height;
 int pixmap_width;
 
 char *buffer;
-
-
-//char *loadShader(const char *fragment_path) {
-void loadShader(const char *fragment_path) {
-  FILE *fp;
-  long lSize;
-
-  fp = fopen("shader.frag", "rb");
-  if (!fp) {
-    printf("error reading shader file\n");
-    exit(1);
-  }
-  
-  fseek(fp, 0L, SEEK_END);
-  lSize = ftell(fp);
-  rewind(fp);
-
-  printf("Shader is %li bytes long\n", lSize);
-
-  buffer = calloc(1, lSize + 1);
-  if (!buffer) {
-    fclose(fp);
-    printf("allocation failed for shader buffer\n");
-    exit(1);
-  }
-
-  if ( 1 != fread(buffer, lSize, 1, fp) ) {
-    fclose(fp);
-    free(buffer);
-    printf("Entire read fails\n");
-  }
-
-  fclose(fp);
-  //free(buffer);
-
-  //return buffer;
-}
+uint16_t buffer_size;
 
 // Working test shader:
 // Until I get file loading working, DO NOT MODIFY THIS ONE... Just clone it...
@@ -208,6 +172,36 @@ void loadShader(const char *fragment_path) {
 //    //"   FragColor = texture(barTex, Texcoord);\n"
 //    "}\n\0";
 
+
+const char *fragShaderPreamble = "#version 130\n"
+    "uniform float iGlobalTime;\n"
+    "uniform vec2 iResolution;\n"
+    //"uniform vec2 iMouse;\n" // THIS NEEDS TO BE IMPLEMENTED
+    "in vec2 Texcoord;\n"
+    "uniform sampler2D barTex;\n"
+    "in vec3 Color;\n"
+    "out vec4 FragColor;\n"
+    "\n\0";
+
+const char *fragShaderDefault = "void mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n"
+    "   vec2 uv = fragCoord.xy / iResolution.xy;\n"
+    "// We want to show _something_ to the user to show that at least we're rendering a shader\n"
+    "   float circle = sin(iGlobalTime*10.0f);\n"
+    "//   fragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), 0.5);\n"
+    "// This is the 'correct' way to display the standard lemon bar text:\n"
+    "   fragColor = texture(barTex, Texcoord); // Draw bar without modifications\n" 
+    "}\n"
+    "\n\0";
+
+// This main() function calls mainImage() like ShaderToys. Don't change it...
+const char *fragShaderPostamble = "void main() {\n"
+    "   vec2 uv = Texcoord;\n"
+    "   vec4 outFragColor = vec4(1.0, 0.5, 0, 0);\n"
+    "   vec2 inFragCoord = vec2(Texcoord.x*iResolution.x, Texcoord.y*iResolution.y);\n"
+    "   mainImage(outFragColor, inFragCoord);\n"
+    "   FragColor = outFragColor;\n"
+    "}\n"
+    "\n\0";
 
 const char *fragmentShaderSource = "#version 130\n"
     "uniform float iGlobalTime;\n"
@@ -271,6 +265,61 @@ const char *vertexShaderSource = "#version 130\n"
     "   gl_Position = vec4(position, 0.0f, 1.0f);\n"
     "}\0";
 
+//char *loadShader(const char *fragment_path) {
+void loadShader(const char *fragment_path) {
+  FILE *fp;
+  long lSize;
+
+  fp = fopen("shader.frag", "rb");
+  if (!fp) {
+    printf("error reading shader file\n");
+    exit(1);
+  }
+  
+  fseek(fp, 0L, SEEK_END);
+  lSize = ftell(fp);
+  rewind(fp);
+
+  long preambleLength = strlen(fragShaderPreamble);
+  long defaultShaderLength = strlen(fragShaderDefault);
+  long postambleLength = strlen(fragShaderPostamble);
+
+  printf("Shader preamble is %li bytes long\n", preambleLength);
+  printf("Shader is %li bytes long\n", lSize);
+  printf("Shader postamble is %li bytes long\n", postambleLength);
+
+  buffer_size = (lSize + 1) + preambleLength + postambleLength;
+
+  // Debug:
+  //buffer_size = (defaultShaderLength + 1) + preambleLength + postambleLength;
+
+  buffer = calloc(1, buffer_size);
+  if (!buffer) {
+    fclose(fp);
+    printf("allocation failed for shader buffer\n");
+    exit(1);
+  }
+
+  strncpy(buffer, fragShaderPreamble, preambleLength);
+
+  // Debug:
+  //strncpy(buffer + preambleLength, fragShaderDefault, defaultShaderLength);
+  //strncpy(buffer + preambleLength + defaultShaderLength, fragShaderPostamble, postambleLength);
+
+  // We are offsetting into the buffer to skip the preamble:
+  if ( 1 != fread(buffer + preambleLength, lSize, 1, fp) ) {
+    fclose(fp);
+    free(buffer);
+    printf("Entire read fails\n");
+  }
+  fclose(fp);
+  
+  // And here we are offsetting to skip both the preamble and the shader itself:
+  strncpy(buffer + preambleLength + lSize, fragShaderPostamble, postambleLength);
+
+  //return buffer;
+}
+
 GLfloat vertices[] = {
     -1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,// Top-left
      1.0f,  1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,// Top-right
@@ -312,21 +361,21 @@ void printStatus(const char *step, GLuint context, GLuint status)
   GLint result = GL_FALSE;
   glGetShaderiv(context, status, &result);
   if (result == GL_FALSE) {
-    char buffer[1024];
+    char infoBuffer[1024];
     if (status == GL_COMPILE_STATUS) {
       printf("GL_COMPILE_STATUS: Compile failed!\n");
-      glGetShaderInfoLog(context, 1024, NULL, buffer);
+      glGetShaderInfoLog(context, 1024, NULL, infoBuffer);
     } else if (status == GL_LINK_STATUS) {
       printf("GL_LINK_STATUS: Link program failed!\n");
-      glGetProgramInfoLog(context, 1024, NULL, buffer);
+      glGetProgramInfoLog(context, 1024, NULL, infoBuffer);
     } else {
       printf("GL Status GL_FALSE! status GLuint requested was: %i\n", status);
-      glGetProgramInfoLog(context, 1024, NULL, buffer);
+      glGetProgramInfoLog(context, 1024, NULL, infoBuffer);
     }
-    if (buffer[0]) {
-      fprintf(stderr, "%s: %s\n", step, buffer);
+    if (infoBuffer[0]) {
+      fprintf(stderr, "%s: %s\n", step, infoBuffer);
     } else {
-      printf("no buffer?? %s\n", buffer);
+      printf("no infoBuffer?? %s\n", infoBuffer);
     }
   } else {
     printf("GL Status should be good!\n");
@@ -1532,7 +1581,8 @@ init (char *wm_name)
         printCompileStatus("Vertex shader", v);
 
         GLuint f = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(f, 1, &fragmentShaderSource, NULL);
+        //glShaderSource(f, 1, &fragmentShaderSource, NULL);
+        glShaderSource(f, 1, &buffer, NULL);
         glCompileShader(f);
         printCompileStatus("Fragment shader", f);
 
@@ -1648,6 +1698,8 @@ cleanup (void)
         xcb_free_gc(c, gc[GC_ATTR]);
     if (c)
         xcb_disconnect(c);
+
+    free(buffer);
 }
 
 void
@@ -1689,7 +1741,7 @@ main (int argc, char **argv)
 
     // Load the shader:
     loadShader("shader.txt");
-    printf("shader: \n%s", buffer);
+    printf("Full composed shader: \n%s", buffer);
     
     // Connect to the Xserver and initialize scr
     xconn();
@@ -1822,7 +1874,7 @@ main (int argc, char **argv)
           }
           glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pixmap_width, pixmap_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (void*)(&(xim->data[0])));
         }
-        printf("f:%f, w:%i, h:%i\n", currentFrame, pixmap_width, pixmap_height);
+        //printf("f:%f, w:%i, h:%i\n", currentFrame, pixmap_width, pixmap_height);
         glUniform2f(iResolution, pixmap_width, pixmap_height);
         
         glClearColor(byteLoop8/255.0, 0.0, 0.0, 1.0); 

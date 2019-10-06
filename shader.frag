@@ -1,15 +1,15 @@
-//uniform float iGlobalTime;
-//uniform vec2 iResolution;
-//uniform vec2 iMouse;
-
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-   vec2 uv = fragCoord.xy / iResolution.xy;
-   fragColor = vec4(uv.x, uv.y, 0.5+0.5*sin(iGlobalTime), 1.0);
+  vec2 uv = fragCoord.xy / iResolution.xy;
+  float circle = sin(iGlobalTime*10.0f);
+  fragColor = mix(texture(barTex, Texcoord), vec4(Color, 1.0f), 0.5);
+
+  vec2 wiggleOffset = vec2(Texcoord.x, Texcoord.y + sin(Texcoord.x*80.0f+(iGlobalTime*20.0f))/8.0f ); 
+  
+  //fragColor = texture(barTex, wiggleOffset);
+  fragColor = mix(texture(barTex, wiggleOffset), vec4(Color, 1.0f), 0.5);
+  
+//  fragColor = vec4(uv.x, uv.y, 0.5+0.5*sin(iGlobalTime), 1.0);
+  // Draw bar without modifications
+  //fragColor = texture(barTex, Texcoord);
 }
 
-//void main(void) {
-//   vec4 outFragColor = vec4(1.0,0.5,0,0);
-//   vec2 inFragCoord = vec2(cogl_tex_coord_in[0].x*iResolution.x, cogl_tex_coord_in[0].y*iResolution.y);
-//   mainImage(outFragColor, inFragCoord);
-//   cogl_color_out = outFragColor;
-//}
