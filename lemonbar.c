@@ -151,6 +151,13 @@ int pixmap_width;
 char *buffer;
 uint16_t buffer_size;
 
+// Reference Guides for various versions of GLSL can be found here:
+// khronos.org/developers/reference-cards/
+//
+// My current laptop supports:
+// 1.10, 1.20, 1.30, 1.00 ES, 3.00 ES, 3.10 ES, and 3.20 ES
+// I found this by setting #version 450 at the top of the preamble.
+
 // Working test shader:
 // Until I get file loading working, DO NOT MODIFY THIS ONE... Just clone it...
 //const char *fragmentShaderSource = "#version 130\n"
@@ -173,7 +180,8 @@ uint16_t buffer_size;
 //    "}\n\0";
 
 
-const char *fragShaderPreamble = "#version 130\n"
+const char *fragShaderPreamble = "#version 320 es\n"
+    "precision mediump float;\n"
     "uniform float iGlobalTime;\n"
     "uniform vec2 iResolution;\n"
     //"uniform vec2 iMouse;\n" // THIS NEEDS TO BE IMPLEMENTED
@@ -252,7 +260,8 @@ const char *fragmentShaderSource = "#version 130\n"
 
 // Nothing below here should need changes!
 // This vertex shader just throws up the quad that presents the shader!
-const char *vertexShaderSource = "#version 130\n"
+const char *vertexShaderSource = "#version 320 es\n"
+    "precision mediump float;\n"
     "in vec2 position;\n"
     "in vec3 color;\n"
     "in vec2 texcoord;\n"
@@ -1721,6 +1730,7 @@ main (int argc, char **argv)
     xcb_generic_event_t *ev;
     xcb_expose_event_t *expose_ev;
     xcb_button_press_event_t *press_ev;
+    xcb_motion_notify_event_t *move_ev;
     char input[4096] = {0, };
     bool permanent = false;
     int geom_v[4] = { -1, -1, 0, 0 };
@@ -1849,6 +1859,12 @@ main (int argc, char **argv)
                                     (void)write(STDOUT_FILENO, area->cmd, strlen(area->cmd));
                                     (void)write(STDOUT_FILENO, "\n", 1);
                                 }
+                            }
+                            break;
+                        case XCB_EVENT_MASK_POINTER_MOTION:
+                            move_ev = (xcb_motion_notify_event_t *)ev;
+                            {
+                               printf("Mouse motion event: x: %i, y: %i", move_ev->event_x, move_ev->event_y); 
                             }
                             break;
                     }
